@@ -1,3 +1,9 @@
+#if 1
+#define DEBUG_MESSAGE(A) fprintf( stderr, A );
+#else
+#define DEBUG_MESSAGE(A)
+#endif
+
 #if !(defined(_WIN32) || defined(_WIN64))
 #include <err.h>
 #endif
@@ -69,6 +75,7 @@ replace_stop_with_return(mrb_state *mrb, mrb_irep *irep)
 static int
 compile_rb2mrb(mrb_state *mrb0, const char *code, int code_len, const char *path, FILE* tmpfp)
 {
+  DEBUG_MESSAGE("in compile_rb2mrb\n")
   mrb_state *mrb = mrb_open();
   mrb_value result;
   mrbc_context *c;
@@ -86,6 +93,7 @@ compile_rb2mrb(mrb_state *mrb0, const char *code, int code_len, const char *path
   if (mrb_undef_p(result)) {
     mrbc_context_free(mrb, c);
     mrb_close(mrb);
+    DEBUG_MESSAGE("out compile_rb2mrb 1\n")
     return MRB_DUMP_GENERAL_FAILURE;
   }
 
@@ -94,6 +102,7 @@ compile_rb2mrb(mrb_state *mrb0, const char *code, int code_len, const char *path
 
   mrbc_context_free(mrb, c);
   mrb_close(mrb);
+  DEBUG_MESSAGE("out compile_rb2mrb 2\n")
 
   return ret;
 }
@@ -103,6 +112,7 @@ eval_load_irep(mrb_state *mrb, mrb_irep *irep)
 {
   int ai;
   struct RProc *proc;
+  DEBUG_MESSAGE("in eval_load_irep\n")
 
 #ifdef USE_MRUBY_OLD_BYTE_CODE
   replace_stop_with_return(mrb, irep);
@@ -114,11 +124,13 @@ eval_load_irep(mrb_state *mrb, mrb_irep *irep)
   ai = mrb_gc_arena_save(mrb);
   mrb_yield_with_class(mrb, mrb_obj_value(proc), 0, NULL, mrb_top_self(mrb), mrb->object_class);
   mrb_gc_arena_restore(mrb, ai);
+  DEBUG_MESSAGE("out eval_load_irep\n")
 }
 
 static mrb_value
 mrb_require_load_rb_str(mrb_state *mrb, mrb_value self)
 {
+  DEBUG_MESSAGE("in mrb_require_load_rb_str\n")
   char *path_ptr = NULL;
 #if defined(_WIN32) || defined(_WIN64)
   char tmpname[MAX_PATH] = "tmp.XXXXXXXX";
@@ -155,6 +167,7 @@ mrb_require_load_rb_str(mrb_state *mrb, mrb_value self)
     fclose(tmpfp);
     remove(tmpname);
     mrb_raisef(mrb, E_LOAD_ERROR, "can't load file -- %S", path);
+    DEBUG_MESSAGE("out mrb_require_load_rb_str 1\n")
     return mrb_nil_value();
   }
 
@@ -170,15 +183,17 @@ mrb_require_load_rb_str(mrb_state *mrb, mrb_value self)
     longjmp(*(jmp_buf*)mrb->jmp, 1);
   } else {
     mrb_raisef(mrb, E_LOAD_ERROR, "can't load file -- %S", path);
+    DEBUG_MESSAGE("out mrb_require_load_rb_str 2\n")
     return mrb_nil_value();
   }
-
+  DEBUG_MESSAGE("out mrb_require_load_rb_str 3\n")
   return mrb_true_value();
 }
 
 static mrb_value
 mrb_require_load_mrb_file(mrb_state *mrb, mrb_value self)
 {
+  DEBUG_MESSAGE("in mrb_require_load_mrb_file\n")
   char *path_ptr = NULL;
   FILE *fp = NULL;
   mrb_irep *irep;
@@ -204,18 +219,20 @@ mrb_require_load_mrb_file(mrb_state *mrb, mrb_value self)
     mrb_raisef(mrb, E_LOAD_ERROR, "can't load file -- %S", path);
     return mrb_nil_value();
   }
-
+  DEBUG_MESSAGE("out mrb_require_load_mrb_file\n")
   return mrb_true_value();
 }
 
 void
 mrb_mruby_require_gem_init(mrb_state *mrb)
 {
+  DEBUG_MESSAGE("in mrb_mruby_require_gem_init\n")
   struct RClass *krn;
   krn = mrb->kernel_module;
 
   mrb_define_method(mrb, krn, "_load_rb_str",   mrb_require_load_rb_str,   MRB_ARGS_ANY());
   mrb_define_method(mrb, krn, "_load_mrb_file", mrb_require_load_mrb_file, MRB_ARGS_REQ(1));
+  DEBUG_MESSAGE("out mrb_mruby_require_gem_init\n")
 }
 
 void
