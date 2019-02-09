@@ -1,4 +1,4 @@
-#if 1
+#if 0
 #define DEBUG_MESSAGE(A) fprintf( stderr, A );
 #else
 #define DEBUG_MESSAGE(A)
