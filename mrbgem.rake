@@ -1,4 +1,4 @@
-MRuby::Gem::Specification.new('mruby-require') do |spec|
+MRuby::Gem::Specification.new('pins-mruby-require') do |spec|
   spec.license = 'MIT'
   spec.authors = 'Internet Initiative Japan Inc.'
 

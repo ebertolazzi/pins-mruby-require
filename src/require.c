@@ -224,7 +224,7 @@ mrb_require_load_mrb_file(mrb_state *mrb, mrb_value self)
 }
 
 void
-mrb_mruby_require_gem_init(mrb_state *mrb)
+mrb_pins_mruby_require_gem_init(mrb_state *mrb)
 {
   DEBUG_MESSAGE("in mrb_mruby_require_gem_init\n")
   struct RClass *krn;
@@ -236,6 +236,6 @@ mrb_mruby_require_gem_init(mrb_state *mrb)
 }
 
 void
-mrb_mruby_require_gem_final(mrb_state *mrb)
+mrb_pins_mruby_require_gem_final(mrb_state *mrb)
 {
 }
