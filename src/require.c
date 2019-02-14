@@ -4,12 +4,9 @@
 #define DEBUG_MESSAGE(A)
 #endif
 
-#if !(defined(_WIN32) || defined(_WIN64))
-#include <err.h>
+#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64)
+  #define OS_WINDOWS
 #endif
-#include <fcntl.h>
-#include <setjmp.h>
-#include <unistd.h>
 
 #include "mruby.h"
 #include "mruby/compile.h"
@@ -20,6 +17,22 @@
 #include "opcode.h"
 #include "error.h"
 
+#ifdef OS_WINDOWS
+  #include <io.h>
+  #define access _access
+  #define R_OK    4       /* Test for read permission.  */
+  #define W_OK    2       /* Test for write permission.  */
+  #define F_OK    0       /* Test for existence.  */
+
+  //#include <process.h> /* for getpid() and the exec..() family */
+  //#include <direct.h> /* for _getcwd() and _chdir() */
+#else
+  #include <err.h>
+  #include <unistd.h>
+#endif
+
+#include <fcntl.h>
+#include <setjmp.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 
@@ -27,11 +40,19 @@
 
 /* We can't use MRUBY_RELEASE_NO to determine if byte code implementation is old */
 #ifdef MKOP_A
-#define USE_MRUBY_OLD_BYTE_CODE
+  #define USE_MRUBY_OLD_BYTE_CODE
 #endif
 
 #if MRUBY_RELEASE_NO < 10000
-mrb_value mrb_yield_internal(mrb_state *mrb, mrb_value b, int argc, mrb_value *argv, mrb_value self, struct RClass *c);
+mrb_value
+mrb_yield_internal(
+  mrb_state *mrb,
+  mrb_value b,
+  int       argc,
+  mrb_value *argv,
+  mrb_value self,
+  struct RClass *c
+);
 #define mrb_yield_with_class mrb_yield_internal
 #endif
 
@@ -41,10 +62,10 @@ mrb_value mrb_yield_internal(mrb_state *mrb, mrb_value b, int argc, mrb_value *a
 } while (0)
 #endif
 
-#if defined(_WIN32) || defined(_WIN64)
+#ifdef OS_WINDOWS
   #include <windows.h>
-  int mkstemp(char *template)
-  {
+  int
+  mkstemp( char *template ) {
     DWORD pathSize;
     char pathBuffer[1000];
     char tempFilename[MAX_PATH];
@@ -55,14 +76,14 @@ mrb_value mrb_yield_internal(mrb_state *mrb, mrb_value b, int argc, mrb_value *a
     uniqueNum = GetTempFileName(pathBuffer, template, 0, tempFilename);
     if (uniqueNum == 0) return -1;
     strncpy(template, tempFilename, MAX_PATH);
-    return open(tempFilename, _O_RDWR|_O_BINARY);
+    return _open( tempFilename, _O_RDWR|_O_BINARY );
   }
 #endif
 
 #ifdef USE_MRUBY_OLD_BYTE_CODE
-static void
-replace_stop_with_return(mrb_state *mrb, mrb_irep *irep)
-{
+static
+void
+replace_stop_with_return( mrb_state *mrb, mrb_irep *irep ) {
   if (irep->iseq[irep->ilen - 1] == MKOP_A(OP_STOP, 0)) {
     irep->iseq = mrb_realloc(mrb, irep->iseq, (irep->ilen + 1) * sizeof(mrb_code));
     irep->iseq[irep->ilen - 1] = MKOP_A(OP_LOADNIL, 0);
@@ -72,9 +93,15 @@ replace_stop_with_return(mrb_state *mrb, mrb_irep *irep)
 }
 #endif
 
-static int
-compile_rb2mrb(mrb_state *mrb0, const char *code, int code_len, const char *path, FILE* tmpfp)
-{
+static
+int
+compile_rb2mrb(
+  mrb_state  * mrb0,
+  const char * code,
+  int          code_len,
+  const char * path,
+  FILE       * tmpfp
+) {
   DEBUG_MESSAGE("in compile_rb2mrb\n")
   mrb_state *mrb = mrb_open();
   mrb_value result;
@@ -107,11 +134,14 @@ compile_rb2mrb(mrb_state *mrb0, const char *code, int code_len, const char *path
   return ret;
 }
 
-static void
-eval_load_irep(mrb_state *mrb, mrb_irep *irep)
-{
-  int ai;
-  struct RProc *proc;
+static
+void
+eval_load_irep(
+  mrb_state * mrb,
+  mrb_irep  * irep
+) {
+  int            ai;
+  struct RProc * proc;
   DEBUG_MESSAGE("in eval_load_irep\n")
 
 #ifdef USE_MRUBY_OLD_BYTE_CODE
@@ -127,43 +157,53 @@ eval_load_irep(mrb_state *mrb, mrb_irep *irep)
   DEBUG_MESSAGE("out eval_load_irep\n")
 }
 
-static mrb_value
-mrb_require_load_rb_str(mrb_state *mrb, mrb_value self)
-{
+static
+mrb_value
+mrb_require_load_rb_str(
+  mrb_state * mrb,
+  mrb_value   self
+) {
   DEBUG_MESSAGE("in mrb_require_load_rb_str\n")
   char *path_ptr = NULL;
-#if defined(_WIN32) || defined(_WIN64)
+#ifdef OS_WINDOWS
   char tmpname[MAX_PATH] = "tmp.XXXXXXXX";
 #else
   char tmpname[] = "tmp.XXXXXXXX";
-#endif
   mode_t mask;
+#endif
   FILE *tmpfp = NULL;
   int fd = -1, ret;
   mrb_irep *irep;
   mrb_value code, path = mrb_nil_value();
 
   mrb_get_args(mrb, "S|S", &code, &path);
-  if (!mrb_string_p(path)) {
-    path = mrb_str_new_cstr(mrb, "-");
-  }
+  if ( !mrb_string_p(path) ) path = mrb_str_new_cstr(mrb, "-");
   path_ptr = mrb_str_to_cstr(mrb, path);
 
+  #ifndef OS_WINDOWS
   mask = umask(077);
+  #endif
   fd = mkstemp(tmpname);
-  if (fd == -1) {
-    mrb_sys_fail(mrb, "can't create mkstemp() at mrb_require_load_rb_str");
-  }
+  if ( fd == -1 )
+    mrb_sys_fail( mrb, "can't create mkstemp() at mrb_require_load_rb_str" );
+  #ifndef OS_WINDOWS
   umask(mask);
+  #endif
 
+  #ifdef OS_WINDOWS
+  tmpfp = _fdopen(fd, "r+");
+  #else
   tmpfp = fdopen(fd, "r+");
+  #endif
   if (tmpfp == NULL) {
     close(fd);
-    mrb_sys_fail(mrb, "can't open temporay file at mrb_require_load_rb_str");
+    mrb_sys_fail( mrb, "can't open temporay file at mrb_require_load_rb_str" );
   }
 
-  ret = compile_rb2mrb(mrb, RSTRING_PTR(code), RSTRING_LEN(code), path_ptr, tmpfp);
-  if (ret != MRB_DUMP_OK) {
+  ret = compile_rb2mrb(
+    mrb, RSTRING_PTR(code), RSTRING_LEN(code), path_ptr, tmpfp
+  );
+  if ( ret != MRB_DUMP_OK ) {
     fclose(tmpfp);
     remove(tmpname);
     mrb_raisef(mrb, E_LOAD_ERROR, "can't load file -- %S", path);
@@ -190,9 +230,9 @@ mrb_require_load_rb_str(mrb_state *mrb, mrb_value self)
   return mrb_true_value();
 }
 
-static mrb_value
-mrb_require_load_mrb_file(mrb_state *mrb, mrb_value self)
-{
+static
+mrb_value
+mrb_require_load_mrb_file( mrb_state *mrb, mrb_value self ) {
   DEBUG_MESSAGE("in mrb_require_load_mrb_file\n")
   char *path_ptr = NULL;
   FILE *fp = NULL;
@@ -202,10 +242,12 @@ mrb_require_load_mrb_file(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "S", &path);
   path_ptr = mrb_str_to_cstr(mrb, path);
 
-  fp = fopen(path_ptr, "rb");
-  if (fp == NULL) {
-    mrb_raisef(mrb, E_LOAD_ERROR, "can't open file -- %S", path);
-  }
+  #ifdef OS_WINDOWS
+    if ( 0 != fopen_s( &fp, path_ptr, "rb") )
+  #else
+    if ( NULL == (fp = fopen(path_ptr, "rb") ) )
+  #endif
+      mrb_raisef( mrb, E_LOAD_ERROR, "can't open file -- %S", path );
 
   irep = mrb_read_irep_file(mrb, fp);
   fclose(fp);
@@ -224,8 +266,7 @@ mrb_require_load_mrb_file(mrb_state *mrb, mrb_value self)
 }
 
 void
-mrb_pins_mruby_require_gem_init(mrb_state *mrb)
-{
+mrb_pins_mruby_require_gem_init( mrb_state * mrb ) {
   DEBUG_MESSAGE("in mrb_mruby_require_gem_init\n")
   struct RClass *krn;
   krn = mrb->kernel_module;
