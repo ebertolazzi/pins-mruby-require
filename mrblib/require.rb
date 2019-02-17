@@ -1,26 +1,14 @@
 class LoadError < ScriptError; end
 
-$__mruby_require_toplevel_self__ = self
-begin
-  eval "1", nil
-  def _require_eval_load(*args)
-    $__mruby_require_toplevel_self__.eval(*args)
-  end
-rescue ArgumentError
-  def _require_eval_load(*args)
-    $__mruby_require_toplevel_self__.eval(args[0])
-  end
-end
-
 module Kernel
+
   def load(path)
     raise TypeError unless path.class == String
 
     if File.exist?(path) && File.extname(path) == ".mrb"
       _load_mrb_file path
     elsif File.exist?(path)
-      # _load_rb_str File.open(path).read.to_s, path
-      _require_eval_load File.open(path).read.to_s, nil, path
+      _load_rb_str File.open(path).read.to_s, path
     else
       raise LoadError, "File not found -- #{path}"
     end
@@ -32,16 +20,12 @@ module Kernel
     raise TypeError unless path.class == String
 
     # require method can load .rb, .mrb or without-ext filename only.
-    unless ["", ".rb", ".mrb"].include? File.extname(path)
-      raise LoadError, "cannot load such file -- #{path}"
-    end
-
     filenames = []
-    if File.extname(path).size == 0
+    if [".rb", ".mrb"].include? File.extname(path) then
+      filenames << path
+    else
       filenames << "#{path}.rb"
       filenames << "#{path}.mrb"
-    else
-      filenames << path
     end
 
     dir = nil
@@ -61,7 +45,7 @@ module Kernel
     end
 
     unless path0 && File.file?(path0)
-      raise LoadError, "cannot load such file -- #{path}"
+      raise LoadError, "cannot load such file (bad path or not a file) -- #{path}"
     end
 
     realpath = File.realpath(path0)
@@ -86,5 +70,5 @@ if Object.const_defined?(:ENV)
 end
 $LOAD_PATH.uniq!
 
-$" ||= []
+$"                       ||= []
 $__mruby_loading_files__ ||= []

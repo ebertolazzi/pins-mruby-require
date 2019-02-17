@@ -250,56 +250,6 @@ mrb_require_load_mrb_file( mrb_state *mrb, mrb_value self ) {
   return mrb_true_value();
 }
 
-
-static
-mrb_value
-mrb_require_load_file( mrb_state *mrb, mrb_value self ) {
-  char *filename = NULL;
-  FILE *file     = NULL;
-  mrbc_context *cxt;
-  mrb_irep     *irep;
-  mrb_value     path;
-
-  mrb_get_args(mrb, "S", &path);
-  filename = mrb_str_to_cstr( mrb, path );
-
-  #ifdef OS_WINDOWS
-  if ( fopen_s( &file, filename, "r" ) != 0 )
-  #else
-  if ( (file = fopen(filename, "r")) == NULL )
-  #endif
-  {
-    mrb_raisef( mrb, E_LOAD_ERROR, "can't open file -- %S", path );
-    return mrb_nil_value();
-  }
-
-  cxt = mrbc_context_new( mrb );
-  cxt->capture_errors = TRUE;
-  cxt->lineno         = 1;
-  cxt->no_exec        = FALSE;
-
-  mrbc_filename( mrb, cxt, filename );
-  mrb_value v;
-  size_t len = strlen(filename);
-  if ( len > 4 && strcmp( filename+len-4,".mrb") == 0 ) {
-    v = mrb_load_irep_file_cxt( mrb, file, cxt );
-  } else {
-    v = mrb_load_file_cxt( mrb, file, cxt );
-  }
-
-  mrbc_context_free( mrb, cxt );
-  fclose(file);
-
-  if ( mrb->exc != NULL ) {
-    if (!mrb_undef_p(v)) {
-      mrb_print_error( mrb );
-      return mrb_nil_value();
-    }
-  }
-  return mrb_true_value();
-}
-
-
 void
 mrb_pins_mruby_require_gem_init( mrb_state * mrb ) {
   struct RClass *krn;
@@ -312,11 +262,6 @@ mrb_pins_mruby_require_gem_init( mrb_state * mrb ) {
   mrb_define_method(
     mrb, krn, "_load_mrb_file",
     mrb_require_load_mrb_file,
-    MRB_ARGS_REQ(1)
-  );
-  mrb_define_method(
-    mrb, krn, "_load_file",
-    mrb_require_load_file,
     MRB_ARGS_REQ(1)
   );
 }
