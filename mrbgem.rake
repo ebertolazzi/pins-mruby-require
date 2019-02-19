@@ -9,5 +9,8 @@ MRuby::Gem::Specification.new('pins-mruby-require') do |spec|
   ##spec.add_test_dependency 'pins-mruby-tempfile'
   ##spec.add_test_dependency 'mruby-time'
 
+  if RUBY_PLATFORM.downcase !~ /mswin(?!ce)|mingw|bccwin/
+    spec.linker.libraries << ['dl']
+  end
   spec.cc.include_paths << "#{build.root}/src"
 end
